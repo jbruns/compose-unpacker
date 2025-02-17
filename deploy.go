@@ -107,8 +107,7 @@ func (cmd *DeployCommand) Run(cmdCtx *CommandExecutionContext) error {
 		composeFilePaths[i] = path.Join(clonePath, cmd.ComposeRelativeFilePaths[i])
 	}
 
-	err = sopsDecrypt(composeFilePaths, cmd.Env)
-	if err != nil {
+	if err := sopsDecrypt(composeFilePaths, cmd.Env); err != nil {
 		log.Error().
 			Err(err).
 			Msg("Failed to decrypt SOPS files")
