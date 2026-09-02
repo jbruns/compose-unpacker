@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/jbruns/compose-unpacker-sops/internal/manifest"
@@ -108,7 +107,7 @@ func Resolve(ctx context.Context, current manifest.Manifest, sources Sources) (m
 
 func highestLTS(releases []Release) (Release, error) {
 	var selected Release
-	var selectedParts [3]int
+	var selectedParts [3]string
 	found := false
 
 	for _, release := range releases {
@@ -121,18 +120,9 @@ func highestLTS(releases []Release) (Release, error) {
 			continue
 		}
 
-		var parts [3]int
-		valid := true
+		var parts [3]string
 		for i := range parts {
-			part, err := strconv.Atoi(matches[i+1])
-			if err != nil {
-				valid = false
-				break
-			}
-			parts[i] = part
-		}
-		if !valid {
-			continue
+			parts[i] = normalizeNumericComponent(matches[i+1])
 		}
 
 		if !found || versionGreater(parts, selectedParts) {
@@ -157,9 +147,20 @@ func hasToken(value, token string) bool {
 	return false
 }
 
-func versionGreater(left, right [3]int) bool {
+func normalizeNumericComponent(component string) string {
+	normalized := strings.TrimLeft(component, "0")
+	if normalized == "" {
+		return "0"
+	}
+	return normalized
+}
+
+func versionGreater(left, right [3]string) bool {
 	for i := range left {
 		if left[i] != right[i] {
+			if len(left[i]) != len(right[i]) {
+				return len(left[i]) > len(right[i])
+			}
 			return left[i] > right[i]
 		}
 	}

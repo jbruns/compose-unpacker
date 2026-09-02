@@ -90,6 +90,31 @@ func TestResolveRequiresWhitespaceDelimitedLTSToken(t *testing.T) {
 	}
 }
 
+func TestResolveComparesNumericComponentsWithoutMachineIntegerLimit(t *testing.T) {
+	t.Parallel()
+
+	const largest = "184467440737095516160.0.0"
+	sources := successfulSources()
+	sources.releases = []Release{
+		{TagName: "999.0.0", Name: "Release 999.0.0 LTS"},
+		{TagName: largest, Name: "Release " + largest + " LTS"},
+	}
+	sources.tagCommits = map[string]string{
+		"portainer/999.0.0":           newServerCommit,
+		"compose-unpacker/999.0.0":    newUnpackerCommit,
+		"portainer/" + largest:        newServerCommit,
+		"compose-unpacker/" + largest: newUnpackerCommit,
+	}
+
+	got, _, err := Resolve(context.Background(), currentManifest(), sources)
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if got.Portainer.Version != largest {
+		t.Fatalf("Portainer.Version = %q, want %q", got.Portainer.Version, largest)
+	}
+}
+
 func TestResolveRejectsReleaseListWithoutValidLTS(t *testing.T) {
 	t.Parallel()
 
