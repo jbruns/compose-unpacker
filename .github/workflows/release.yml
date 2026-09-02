@@ -32,6 +32,13 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Require main branch
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "releases are restricted to refs/heads/main (got $GITHUB_REF)" >&2
+            exit 1
+          fi
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -93,11 +100,19 @@ jobs:
             echo "immutable tag already exists: $IMMUTABLE_TAG" >&2
             exit 1
           fi
-          if ! grep -Eqi 'manifest unknown|not found' <<<"$inspect_error"; then
-            echo "could not prove immutable tag is absent: $IMMUTABLE_TAG" >&2
-            printf '%s\n' "$inspect_error" >&2
-            exit 1
-          fi
+          case "$inspect_error" in
+            "$IMMUTABLE_TAG: not found" | \
+              "ERROR: $IMMUTABLE_TAG: not found" | \
+              "$IMMUTABLE_TAG: manifest unknown" | \
+              "ERROR: $IMMUTABLE_TAG: manifest unknown" | \
+              "manifest unknown: $IMMUTABLE_TAG" | \
+              "ERROR: manifest unknown: $IMMUTABLE_TAG") ;;
+            *)
+              echo "could not prove immutable tag is absent: $IMMUTABLE_TAG" >&2
+              printf '%s\n' "$inspect_error" >&2
+              exit 1
+              ;;
+          esac
       - name: Validate prepublish image
         run: scripts/validate.sh --image "$PREPUBLISH_IMAGE"
         env:

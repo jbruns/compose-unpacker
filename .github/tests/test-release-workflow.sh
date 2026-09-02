@@ -7,6 +7,7 @@ SCRATCH="$ROOT/.tmp/test-release-workflow.$$"
 OUTPUT="$SCRATCH/output"
 GITHUB_OUTPUT_FILE="$SCRATCH/github-output"
 METADATA_SCRIPT="$SCRATCH/metadata.sh"
+BRANCH_GUARD_SCRIPT="$SCRATCH/branch-guard.sh"
 GUARD_SCRIPT="$SCRATCH/guard.sh"
 FAKE_BIN="$SCRATCH/bin"
 
@@ -57,6 +58,8 @@ ruby -rpsych -e '
   find_step = ->(name) {
     steps.find { |step| step["name"] == name } or abort "#{name} step not found"
   }
+  branch_guard = find_step.call("Require main branch")
+  abort "main-branch guard must be the first release step" unless steps.first == branch_guard
   login = find_step.call("Log in to GHCR").fetch("with")
   abort "GHCR registry login is missing" unless login.fetch("registry") == "ghcr.io"
   abort "GHCR actor login is missing" unless login.fetch("username") == "${{ github.actor }}"
@@ -85,8 +88,9 @@ ruby -rpsych -e '
   abort "registry attestation is not pushed" unless attest.fetch("push-to-registry") == true
 
   print find_step.call("Derive release metadata").fetch("run")
-  File.write(ARGV.fetch(1), find_step.call("Reject existing immutable tag").fetch("run"))
-' "$WORKFLOW" "$GUARD_SCRIPT" >"$METADATA_SCRIPT"
+  File.write(ARGV.fetch(1), branch_guard.fetch("run"))
+  File.write(ARGV.fetch(2), find_step.call("Reject existing immutable tag").fetch("run"))
+' "$WORKFLOW" "$BRANCH_GUARD_SCRIPT" "$GUARD_SCRIPT" >"$METADATA_SCRIPT"
 
 if grep -E '^[[:space:]]*uses:' "$WORKFLOW" |
 	grep -Ev 'uses: [^@[:space:]]+@[0-9a-f]{40}[[:space:]]+# v[0-9]'; then
@@ -127,13 +131,39 @@ set -euo pipefail
 [[ "$*" == "buildx imagetools inspect ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3" ]] ||
 	exit 64
 case "${INSPECT_RESULT:-absent}" in
-	absent) echo 'manifest unknown: not found' >&2; exit 1 ;;
+	absent) echo "ERROR: ${*: -1}: not found" >&2; exit 1 ;;
+	manifest-unknown) echo "ERROR: ${*: -1}: manifest unknown" >&2; exit 1 ;;
 	exists) exit 0 ;;
 	error) echo 'registry connection failed' >&2; exit 42 ;;
+	credential-error)
+		echo 'error getting credentials: credential helper not found' >&2
+		echo "ERROR: ${*: -1}: not found" >&2
+		exit 1
+		;;
+	tool-error)
+		echo "buildx plugin error: ${*: -1}: manifest unknown" >&2
+		exit 1
+		;;
+	network-error)
+		echo "network lookup failed: manifest unknown: ${*: -1}" >&2
+		exit 1
+		;;
 	*) exit 64 ;;
 esac
 EOF
 chmod +x "$FAKE_BIN/go" "$FAKE_BIN/docker"
+
+GITHUB_REF=refs/heads/main bash "$BRANCH_GUARD_SCRIPT" >"$OUTPUT" 2>&1 ||
+	fail "main branch was rejected"
+
+set +e
+GITHUB_REF=refs/heads/release-candidate \
+	bash "$BRANCH_GUARD_SCRIPT" >"$OUTPUT" 2>&1
+status=$?
+set -e
+[[ $status -ne 0 ]] || fail "non-main manual dispatch was accepted"
+grep -F 'releases are restricted to refs/heads/main' "$OUTPUT" >/dev/null ||
+	fail "non-main manual dispatch did not explain the branch restriction"
 
 (
 	cd "$ROOT"
@@ -181,3 +211,21 @@ IMMUTABLE_TAG=ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3 \
 status=$?
 set -e
 [[ $status -ne 0 ]] || fail "immutable guard accepted an inconclusive registry error"
+
+IMMUTABLE_TAG=ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3 \
+	INSPECT_RESULT=manifest-unknown \
+	PATH="$FAKE_BIN:$PATH" \
+	bash "$GUARD_SCRIPT" >"$OUTPUT" 2>&1 ||
+	fail "immutable guard rejected a manifest-unknown response tied to the immutable reference"
+
+for inspect_result in credential-error tool-error network-error; do
+	set +e
+	IMMUTABLE_TAG=ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3 \
+		INSPECT_RESULT=$inspect_result \
+		PATH="$FAKE_BIN:$PATH" \
+		bash "$GUARD_SCRIPT" >"$OUTPUT" 2>&1
+	status=$?
+	set -e
+	[[ $status -ne 0 ]] ||
+		fail "immutable guard accepted $inspect_result containing not found"
+done

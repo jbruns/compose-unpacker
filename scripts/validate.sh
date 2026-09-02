@@ -105,6 +105,14 @@ check_shell_syntax() {
 	find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
 }
 
+run_workflow_tests() {
+	local test
+
+	for test in .github/tests/*.sh; do
+		bash "$test"
+	done
+}
+
 IMAGE=
 case $# in
 	0) ;;
@@ -123,7 +131,7 @@ if [[ -n "${BASE_REF:-}" ]]; then
 	enforce_release_revision
 fi
 
-run_stage "go test -race ./internal/..." \
+run_stage "go test -race ./cmd/... ./internal/..." \
 	make --no-print-directory validate-internal-test
 run_stage "go vet ./internal/..." \
 	make --no-print-directory validate-internal-vet
@@ -131,6 +139,8 @@ run_stage 'test -z "$(gofmt -l cmd internal overlay)"' \
 	make --no-print-directory validate-format
 run_stage "find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n" \
 	check_shell_syntax
+run_stage 'for test in .github/tests/*.sh; do bash "$test"; done' \
+	run_workflow_tests
 run_stage "go run ./cmd/prepare" \
 	make --no-print-directory prepare
 run_stage "(cd .work/upstream/compose-unpacker && go test -race ./...)" \

@@ -25,7 +25,7 @@ if [[ ! -x "$ROOT/scripts/validate.sh" ]]; then
 fi
 
 rm -rf "$SCRATCH"
-mkdir -p "$FIXTURE/scripts" "$FAKE_BIN"
+mkdir -p "$FIXTURE/scripts" "$FIXTURE/.github/tests" "$FAKE_BIN"
 cp "$ROOT/scripts/validate.sh" "$FIXTURE/scripts/validate.sh"
 
 cat >"$FAKE_BIN/make" <<'EOF'
@@ -73,6 +73,18 @@ fi
 EOF
 chmod +x "$FAKE_BIN/make" "$FIXTURE/scripts/validate.sh"
 
+cat >"$FIXTURE/.github/tests/test-release-workflow.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' workflow-test:release >>"$MAKE_LOG"
+EOF
+cat >"$FIXTURE/.github/tests/test-update-workflow.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' workflow-test:update >>"$MAKE_LOG"
+EOF
+chmod +x "$FIXTURE/.github/tests/"*.sh
+
 write_manifest() {
 	local version=$1
 	local revision=$2
@@ -113,6 +125,8 @@ cat >"$SCRATCH/expected-make-log" <<'EOF'
 validate-internal-test
 validate-internal-vet
 validate-format
+workflow-test:release
+workflow-test:update
 prepare
 validate-upstream-test
 validate-upstream-vet
@@ -130,10 +144,11 @@ if ! diff -u "$SCRATCH/expected-make-log" "$MAKE_LOG" >"$SCRATCH/log-diff"; then
 fi
 
 for heading in \
-	"go test -race ./internal/..." \
+	"go test -race ./cmd/... ./internal/..." \
 	"go vet ./internal/..." \
 	'test -z "$(gofmt -l cmd internal overlay)"' \
 	"find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n" \
+	'for test in .github/tests/*.sh; do bash "$test"; done' \
 	"go run ./cmd/prepare" \
 	"(cd .work/upstream/compose-unpacker && go test -race ./...)" \
 	"(cd .work/upstream/compose-unpacker && go vet ./...)" \
