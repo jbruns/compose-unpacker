@@ -209,10 +209,10 @@ func copyOverlay(source, destination string) ([]string, error) {
 }
 
 func applyPatch(ctx context.Context, runner Runner, repository, patch string) error {
-	if err := runner.Run(ctx, repository, "git", "apply", "--check", "--unidiff-zero", patch); err != nil {
+	if err := runner.Run(ctx, repository, "git", "apply", "--check", patch); err != nil {
 		return err
 	}
-	return runner.Run(ctx, repository, "git", "apply", "--unidiff-zero", patch)
+	return runner.Run(ctx, repository, "git", "apply", patch)
 }
 
 func verifyChanges(ctx context.Context, runner Runner, repository string, allowed []string) error {

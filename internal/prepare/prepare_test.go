@@ -87,8 +87,8 @@ func TestRunPreparesImmutableUpstreamTrees(t *testing.T) {
 		"git fetch --depth=1 origin refs/tags/2.45.0",
 		"git checkout --detach d79ba726cd54395a54cca5e9180609ce52fa7a4f",
 		"go mod edit -replace=github.com/portainer/portainer=../portainer",
-		"git apply --check --unidiff-zero " + patchPath,
-		"git apply --unidiff-zero " + patchPath,
+		"git apply --check " + patchPath,
+		"git apply " + patchPath,
 	}
 	if !reflect.DeepEqual(runner.runCommands(), wantCommands) {
 		t.Fatalf("run commands = %#v, want %#v", runner.runCommands(), wantCommands)
@@ -171,7 +171,7 @@ func TestRunReportsFailingStageAndStderr(t *testing.T) {
 	runner := newFakeRunner()
 	runner.setOutput(composeDir, "git rev-parse HEAD", currentManifest.Portainer.ComposeUnpackerCommit+"\n")
 	runner.setOutput(portainerDir, "git rev-parse HEAD", currentManifest.Portainer.ServerCommit+"\n")
-	runner.setError(composeDir, "git apply --check --unidiff-zero "+patchPath, fmt.Errorf("git apply --check failed: stderr: patch rejected"))
+	runner.setError(composeDir, "git apply --check "+patchPath, fmt.Errorf("git apply --check failed: stderr: patch rejected"))
 
 	err := Run(context.Background(), Options{
 		Root:     root,
@@ -186,6 +186,42 @@ func TestRunReportsFailingStageAndStderr(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "patch rejected") {
 		t.Fatalf("Run() error = %q, want stderr", err.Error())
+	}
+}
+
+func TestComposeUnpackerPatchAppliesToExpectedSourceAndRejectsDrift(t *testing.T) {
+	t.Parallel()
+
+	patchPath := repositoryPath(t, "patches", "compose-unpacker.patch")
+
+	expectedRepo := fixtureRepo(t, "compose-unpacker-upstream")
+	if err := applyPatch(context.Background(), ExecRunner{}, expectedRepo, patchPath); err != nil {
+		t.Fatalf("applyPatch() error = %v", err)
+	}
+
+	composeSource := readRepositoryFile(t, expectedRepo, "commands", "compose_deploy.go")
+	if !strings.Contains(composeSource, `Int("envCount", len(cmd.Env)).`) {
+		t.Fatalf("compose_deploy.go missing envCount redaction after apply")
+	}
+	if strings.Contains(composeSource, `Strs("env", cmd.Env).`) {
+		t.Fatalf("compose_deploy.go still logs raw env after apply")
+	}
+	if !strings.Contains(composeSource, "decryptSOPSFiles(cmdCtx.Context, composeFilePaths, cmd.Env)") {
+		t.Fatalf("compose_deploy.go missing SOPS decryption call after apply")
+	}
+
+	swarmSource := readRepositoryFile(t, expectedRepo, "commands", "swarm_deploy.go")
+	if !strings.Contains(swarmSource, "decryptSOPSFiles(cmdCtx.Context, composeFilePaths, cmd.Env)") {
+		t.Fatalf("swarm_deploy.go missing SOPS decryption call after apply")
+	}
+
+	driftedRepo := fixtureRepo(t, "compose-unpacker-drifted")
+	err := applyPatch(context.Background(), ExecRunner{}, driftedRepo, patchPath)
+	if err == nil {
+		t.Fatal("applyPatch() error = nil, want git apply --check drift rejection")
+	}
+	if !strings.Contains(err.Error(), "git apply --check") {
+		t.Fatalf("applyPatch() error = %q, want git apply --check stage", err.Error())
 	}
 }
 
@@ -294,6 +330,71 @@ func joinCommand(name string, args ...string) string {
 		return name
 	}
 	return name + " " + strings.Join(args, " ")
+}
+
+func fixtureRepo(t *testing.T, fixture string) string {
+	t.Helper()
+
+	repo := filepath.Join(t.TempDir(), "repo")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q) error = %v", repo, err)
+	}
+
+	source := filepath.Join("testdata", fixture)
+	if err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		if relative == "." {
+			return nil
+		}
+
+		target := filepath.Join(repo, relative)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, contents, info.Mode().Perm())
+	}); err != nil {
+		t.Fatalf("copy fixture %q error = %v", fixture, err)
+	}
+
+	if err := (ExecRunner{}).Run(context.Background(), repo, "git", "init"); err != nil {
+		t.Fatalf("git init %q error = %v", repo, err)
+	}
+
+	return repo
+}
+
+func readRepositoryFile(t *testing.T, root string, path ...string) string {
+	t.Helper()
+
+	contents, err := os.ReadFile(filepath.Join(append([]string{root}, path...)...))
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", filepath.Join(append([]string{root}, path...)...), err)
+	}
+
+	return string(contents)
+}
+
+func repositoryPath(t *testing.T, path ...string) string {
+	t.Helper()
+
+	root, err := filepath.Abs(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatalf("Abs() error = %v", err)
+	}
+
+	return filepath.Join(append([]string{root}, path...)...)
 }
 
 func validManifest() manifest.Manifest {

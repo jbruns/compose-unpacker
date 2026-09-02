@@ -2,22 +2,40 @@ diff --git a/commands/compose_deploy.go b/commands/compose_deploy.go
 index 5abfa74..d9e8db6 100644
 --- a/commands/compose_deploy.go
 +++ b/commands/compose_deploy.go
-@@ -45 +45 @@ func (cmd *DeployCommand) Run(cmdCtx *exec.CommandExecutionContext) error {
+@@ -42,7 +42,7 @@ func (cmd *DeployCommand) Run(cmdCtx *exec.CommandExecutionContext) error {
+ 		Str("repository", cmd.GitRepository).
+ 		Strs("composePath", cmd.ComposeRelativeFilePaths).
+ 		Str("destination", cmd.Destination).
 -		Strs("env", cmd.Env).
 +		Int("envCount", len(cmd.Env)).
-@@ -125,0 +126,5 @@ func (cmd *DeployCommand) Run(cmdCtx *exec.CommandExecutionContext) error {
+ 		Bool("skipTLSVerify", cmd.SkipTLSVerify).
+ 		Msg("Deploying Compose stack from Git repository")
+ 
+@@ -123,6 +123,11 @@ func (cmd *DeployCommand) Run(cmdCtx *exec.CommandExecutionContext) error {
+ 		composeFilePaths[i] = filesystem.JoinPaths(clonePath, cmd.ComposeRelativeFilePaths[i])
+ 	}
+ 
 +	if err := decryptSOPSFiles(cmdCtx.Context, composeFilePaths, cmd.Env); err != nil {
 +		log.Error().Err(err).Msg("Failed to decrypt SOPS files")
 +		return err
 +	}
 +
+ 	log.Info().
+ 		Strs("composeFilePaths", composeFilePaths).
+ 		Str("workingDirectory", clonePath).
 diff --git a/commands/swarm_deploy.go b/commands/swarm_deploy.go
 index 8f5fe52..b80e262 100644
 --- a/commands/swarm_deploy.go
 +++ b/commands/swarm_deploy.go
-@@ -126,0 +127,5 @@ func (cmd *SwarmDeployCommand) Run(cmdCtx *exec.CommandExecutionContext) error {
+@@ -124,6 +124,11 @@ func (cmd *SwarmDeployCommand) Run(cmdCtx *exec.CommandExecutionContext) error {
+ 		composeFilePaths[i] = filesystem.JoinPaths(clonePath, cmd.ComposeRelativeFilePaths[i])
+ 	}
+ 
 +	if err := decryptSOPSFiles(cmdCtx.Context, composeFilePaths, cmd.Env); err != nil {
 +		log.Error().Err(err).Msg("Failed to decrypt SOPS files")
 +		return err
 +	}
 +
+ 	registries := exec.ParseRegistryCredentials(cmd.Registry)
+ 
+ 	log.Info().
