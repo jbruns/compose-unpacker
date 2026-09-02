@@ -38,6 +38,7 @@ test: prepare
 		/usr/local/go/bin/go test ./cmd/... ./internal/... ./overlay/sopsdecrypt -count=1 && \
 		cd /repo/.work/upstream/compose-unpacker && \
 		/usr/local/go/bin/go test ./... -count=1'
+	./scripts/test-make-image.sh
 
 test-integration: prepare
 	$(GO_RUN) /usr/local/go/bin/go run ./cmd/fetch-sops -output .work/dist/sops
@@ -48,10 +49,12 @@ test-integration: prepare
 
 image: prepare
 	$(GO_RUN) /usr/local/go/bin/go run ./cmd/fetch-sops -output .work/dist/sops
-	@set -- $$($(GO_RUN) /bin/sh -lc '\
+	@set -eu; \
+	manifest_values=$$($(GO_RUN) /bin/sh -lc '\
 		for field in go-version base-image base-digest portainer-version sops-version overlay-revision; do \
 			/usr/local/go/bin/go run ./cmd/manifest-value "$$field" || exit; \
 		done'); \
+	set -- $$manifest_values; \
 	test "$$#" -eq 6; \
 	docker buildx build \
 		--platform linux/amd64 \
@@ -67,7 +70,7 @@ image: prepare
 		.
 
 test-image:
-	./scripts/test-image.sh "$(IMAGE)"
+	./scripts/test-image-layers.sh "$(IMAGE)"
 
 validate: test test-integration image test-image
 

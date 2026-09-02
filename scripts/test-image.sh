@@ -48,14 +48,45 @@ test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "io.jbrun
 test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "io.jbruns.overlay.revision"}}')" = "$overlay_revision"
 test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')" = "$base_digest"
 
-container=$(docker create --platform linux/amd64 "$IMAGE")
-trap 'docker rm -f "$container" >/dev/null' EXIT
-if docker export "$container" | tar -tf - | grep -E '(^|/)(age-key\.txt|config\.env\.expected|config\.sops\.env)$'; then
-	echo "test fixtures entered the final image filesystem" >&2
-	exit 1
-fi
-if docker export "$container" | tar -xOf - 2>/dev/null |
-	grep -aE 'TEST ONLY: this identity protects no real secret|DEMO_VALUE=decrypted-test-value'; then
-	echo "test fixture content entered the final image filesystem" >&2
+archive=".tmp/test-image-scan.$$.tar"
+layer=".tmp/test-image-layer.$$.tar"
+entries=".tmp/test-image-entries.$$"
+trap 'rm -f "$archive" "$layer" "$entries"' EXIT
+
+age_identity=$(grep -m 1 '^AGE-SECRET-KEY-' overlay/sopsdecrypt/testdata/age-key.txt)
+plaintext=$(cat overlay/sopsdecrypt/testdata/config.env.expected)
+test -n "$age_identity"
+test -n "$plaintext"
+
+docker image save -o "$archive" "$IMAGE"
+expected_layers=$(docker image inspect "$IMAGE" --format '{{len .RootFS.Layers}}')
+scanned_layers=0
+
+while IFS= read -r blob; do
+	tar -xOf "$archive" "$blob" >"$layer"
+	if ! tar -tf "$layer" >"$entries" 2>/dev/null; then
+		continue
+	fi
+	scanned_layers=$((scanned_layers + 1))
+
+	if grep -E '(^|/)(age-key\.txt|config\.env\.expected|config\.sops\.env)$' "$entries" >/dev/null; then
+		echo "test fixture filename found in image layer $blob" >&2
+		echo "test secret material found in image layer" >&2
+		exit 1
+	fi
+	if tar -xOf "$layer" 2>/dev/null |
+		grep -aF \
+			-e "$age_identity" \
+			-e "$plaintext" \
+			-e 'TEST ONLY: this identity protects no real secret' \
+			-e 'DEMO_VALUE=decrypted-test-value' >/dev/null; then
+		echo "test fixture content found in image layer $blob" >&2
+		echo "test secret material found in image layer" >&2
+		exit 1
+	fi
+done < <(tar -tf "$archive" | grep -E '^blobs/sha256/[[:xdigit:]]{64}$')
+
+if [[ $scanned_layers -ne $expected_layers ]]; then
+	echo "scanned $scanned_layers image layers, expected $expected_layers" >&2
 	exit 1
 fi
