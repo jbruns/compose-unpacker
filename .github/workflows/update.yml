@@ -37,11 +37,16 @@ jobs:
             printf '%s\n' "$summary"
             echo CHANGE_SUMMARY
           } >>"$GITHUB_OUTPUT"
-          if git diff --quiet -- versions.json; then
-            echo "changed=false" >>"$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >>"$GITHUB_OUTPUT"
-          fi
+          diff_status=0
+          git diff --quiet -- versions.json || diff_status=$?
+          case "$diff_status" in
+            0) echo "changed=false" >>"$GITHUB_OUTPUT" ;;
+            1) echo "changed=true" >>"$GITHUB_OUTPUT" ;;
+            *)
+              echo "git diff --quiet failed with status $diff_status" >&2
+              exit "$diff_status"
+              ;;
+          esac
       - name: Validate update
         if: steps.update.outputs.changed == 'true'
         run: scripts/validate.sh --image ghcr.io/jbruns/compose-unpacker:update-${GITHUB_RUN_ID}
