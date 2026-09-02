@@ -86,6 +86,8 @@ One reviewed `versions.json` manifest will record:
 - exact `portainer/compose-unpacker` commit;
 - exact `portainer/portainer` commit;
 - official vanilla compose-unpacker image reference and Linux amd64 digest;
+- Go builder version;
+- golangci-lint version;
 - SOPS version;
 - SOPS Linux amd64 asset name, URL, and SHA-256 checksum; and
 - downstream overlay revision.
@@ -235,8 +237,9 @@ asset URL and checksum. Missing or ambiguous release assets are hard failures.
 
 When any input changes, the workflow creates or refreshes one bot branch. It
 updates the manifest, resets the overlay revision to `1` for a new Portainer
-version, and runs the complete validation suite before opening the pull
-request.
+version, increments the overlay revision when SOPS changes within the same
+Portainer version, and runs the complete validation suite before opening the
+pull request.
 
 The pull request reports:
 
@@ -261,8 +264,8 @@ Every pull request runs:
 - `gofmt` checks for owned Go source and `bash -n` checks for owned shell
   source;
 - `go vet ./...` and `go test ./...` in the prepared compose-unpacker tree;
-- upstream `golangci-lint` using its checked-in configuration and the matching
-  Portainer checkout's pinned linter version;
+- upstream `golangci-lint` using its checked-in configuration and the version
+  pinned in `versions.json`;
 - the real age/SOPS integration test;
 - a Linux amd64 image build;
 - `compose-unpacker --help`;
