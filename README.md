@@ -20,3 +20,14 @@ docker run --rm -v /tmp/unpacker:/tmp/unpacker -v /var/run/docker.sock:/var/run/
 ```
 
 **IMPORTANT NOTE**: the bind mount on the host **MUST MATCH** the bind mount inside the container for any relative asset to be loaded properly. `-v /tmp/unpacker:/tmp/unpacker` will work fine but `-v /tmp/unpacker-test:/tmp/unpacker` WILL NOT.
+
+## Version updates
+
+Use `go run ./cmd/update-versions -manifest versions.json -check` to check
+Portainer LTS and SOPS releases, or replace `-check` with `-write` to atomically
+update the manifest. Set `GITHUB_TOKEN` optionally for authenticated GitHub API
+requests.
+
+Exit codes are `0` for success/current, `2` when `-check` finds an update, and
+`1` for invalid arguments, API failures, invalid upstream data, or write
+failures.
