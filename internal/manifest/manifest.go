@@ -133,6 +133,14 @@ func (m Manifest) VersionTag() string {
 	return fmt.Sprintf("%s-sops", m.Portainer.Version)
 }
 
+func (m Manifest) ReleaseTags(repository string) []string {
+	return []string{
+		fmt.Sprintf("%s:%s", repository, m.ImmutableTag()),
+		fmt.Sprintf("%s:%s", repository, m.VersionTag()),
+		fmt.Sprintf("%s:lts-sops", repository),
+	}
+}
+
 func (m Manifest) BaseImage() string {
 	return fmt.Sprintf("%s@%s", m.Portainer.Image, m.Portainer.LinuxAMD64Digest)
 }

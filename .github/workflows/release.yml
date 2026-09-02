@@ -1,0 +1,139 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - versions.json
+      - overlay/**
+      - patches/**
+      - Dockerfile
+      - Makefile
+      - scripts/**
+      - cmd/fetch-sops/**
+      - cmd/manifest-value/**
+      - cmd/prepare/**
+      - internal/fetch/**
+      - internal/manifest/**
+      - internal/prepare/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Derive release metadata
+        id: release
+        env:
+          IMAGE_REPOSITORY: ghcr.io/jbruns/compose-unpacker
+        run: |
+          set -euo pipefail
+          manifest_value() {
+            go run ./cmd/manifest-value -manifest versions.json "$1"
+          }
+
+          release_tags=$(go run ./cmd/manifest-value \
+            -manifest versions.json \
+            -repository "$IMAGE_REPOSITORY" \
+            release-tags)
+          immutable=$(printf '%s\n' "$release_tags" | sed -n '1p')
+          version=$(printf '%s\n' "$release_tags" | sed -n '2p')
+          lts=$(printf '%s\n' "$release_tags" | sed -n '3p')
+          extra=$(printf '%s\n' "$release_tags" | sed -n '4p')
+          if [[ -z "$immutable" || -z "$version" || -z "$lts" || -n "$extra" ]]; then
+            echo "manifest returned an invalid release tag set" >&2
+            exit 1
+          fi
+
+          {
+            echo "immutable=$immutable"
+            echo "go-version=$(manifest_value go-version)"
+            echo "base-image=$(manifest_value base-image)"
+            echo "base-digest=$(manifest_value base-digest)"
+            echo "portainer-version=$(manifest_value portainer-version)"
+            echo "sops-version=$(manifest_value sops-version)"
+            echo "overlay-revision=$(manifest_value overlay-revision)"
+            echo 'tags<<RELEASE_TAGS'
+            printf '%s\n' "$release_tags"
+            echo RELEASE_TAGS
+          } >>"$GITHUB_OUTPUT"
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Reject existing immutable tag
+        env:
+          IMMUTABLE_TAG: ${{ steps.release.outputs.immutable }}
+        run: |
+          set -euo pipefail
+          if inspect_error=$(docker buildx imagetools inspect "$IMMUTABLE_TAG" 2>&1); then
+            echo "immutable tag already exists: $IMMUTABLE_TAG" >&2
+            exit 1
+          fi
+          if ! grep -Eqi 'manifest unknown|not found' <<<"$inspect_error"; then
+            echo "could not prove immutable tag is absent: $IMMUTABLE_TAG" >&2
+            printf '%s\n' "$inspect_error" >&2
+            exit 1
+          fi
+      - name: Validate prepublish image
+        run: scripts/validate.sh --image "$PREPUBLISH_IMAGE"
+        env:
+          PREPUBLISH_IMAGE: ghcr.io/jbruns/compose-unpacker:prepublish-${{ github.sha }}
+      - name: Build and push release
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.release.outputs.tags }}
+          sbom: true
+          provenance: mode=max
+          build-args: |
+            GO_VERSION=${{ steps.release.outputs.go-version }}
+            BASE_IMAGE=${{ steps.release.outputs.base-image }}
+            BASE_DIGEST=${{ steps.release.outputs.base-digest }}
+            PORTAINER_VERSION=${{ steps.release.outputs.portainer-version }}
+            SOPS_VERSION=${{ steps.release.outputs.sops-version }}
+            OVERLAY_REVISION=${{ steps.release.outputs.overlay-revision }}
+            SOURCE_REVISION=${{ github.sha }}
+      - name: Attest immutable image
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ghcr.io/jbruns/compose-unpacker
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+      - name: Summarize release
+        env:
+          IMMUTABLE_TAG: ${{ steps.release.outputs.immutable }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo "## Published image"
+            echo
+            echo "\`$IMMUTABLE_TAG@$DIGEST\`"
+          } >>"$GITHUB_STEP_SUMMARY"

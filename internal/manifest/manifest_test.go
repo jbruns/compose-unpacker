@@ -1,11 +1,27 @@
 package manifest_test
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
 	manifest "github.com/jbruns/compose-unpacker-sops/internal/manifest"
 )
+
+func TestReleaseTags(t *testing.T) {
+	t.Parallel()
+
+	m := validManifest()
+	got := m.ReleaseTags("ghcr.io/jbruns/compose-unpacker")
+	want := []string{
+		"ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3",
+		"ghcr.io/jbruns/compose-unpacker:2.45.0-sops",
+		"ghcr.io/jbruns/compose-unpacker:lts-sops",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ReleaseTags() = %v, want %v", got, want)
+	}
+}
 
 func TestManifestValidate(t *testing.T) {
 	t.Parallel()
@@ -15,7 +31,7 @@ func TestManifestValidate(t *testing.T) {
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
-	if got := valid.ImmutableTag(); got != "2.45.0-sops.2" {
+	if got := valid.ImmutableTag(); got != "2.45.0-sops.3" {
 		t.Fatalf("ImmutableTag() = %q", got)
 	}
 	if got := valid.VersionTag(); got != "2.45.0-sops" {
@@ -213,6 +229,6 @@ func validManifest() manifest.Manifest {
 			SHA256:  "e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b",
 		},
 		Platform:        "linux/amd64",
-		OverlayRevision: 2,
+		OverlayRevision: 3,
 	}
 }

@@ -18,8 +18,8 @@ func TestRunPrintsManifestValues(t *testing.T) {
 		"base-digest":       "sha256:25aea494af4f4f04ce46f9cf4c72e49ed21085cc80e63561cc75292da54bd60a",
 		"portainer-version": "2.45.0",
 		"sops-version":      "v3.13.3",
-		"overlay-revision":  "2",
-		"immutable-tag":     "2.45.0-sops.2",
+		"overlay-revision":  "3",
+		"immutable-tag":     "2.45.0-sops.3",
 		"version-tag":       "2.45.0-sops",
 	}
 
@@ -55,6 +55,52 @@ func TestRunUsesDefaultManifestPath(t *testing.T) {
 	}
 	if got := stdout.String(); got != "2.45.0\n" {
 		t.Fatalf("stdout = %q", got)
+	}
+}
+
+func TestRunPrintsReleaseTags(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run([]string{
+		"-manifest", filepath.Join("..", "..", "versions.json"),
+		"-repository", "ghcr.io/jbruns/compose-unpacker",
+		"release-tags",
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() code = %d, stderr = %q", code, stderr.String())
+	}
+	want := strings.Join([]string{
+		"ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3",
+		"ghcr.io/jbruns/compose-unpacker:2.45.0-sops",
+		"ghcr.io/jbruns/compose-unpacker:lts-sops",
+		"",
+	}, "\n")
+	if got := stdout.String(); got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("stderr = %q, want empty", stderr.String())
+	}
+}
+
+func TestRunRequiresRepositoryForReleaseTags(t *testing.T) {
+	t.Parallel()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := run([]string{
+		"-manifest", filepath.Join("..", "..", "versions.json"),
+		"release-tags",
+	}, &stdout, &stderr)
+	if code == 0 {
+		t.Fatal("run() code = 0, want non-zero")
+	}
+	if !strings.Contains(stderr.String(), "repository") {
+		t.Fatalf("stderr = %q, want repository error", stderr.String())
 	}
 }
 

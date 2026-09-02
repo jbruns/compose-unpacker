@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/jbruns/compose-unpacker-sops/internal/manifest"
 )
@@ -19,6 +20,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	flags.SetOutput(stderr)
 
 	manifestPath := flags.String("manifest", "versions.json", "path to manifest")
+	repository := flags.String("repository", "", "container repository for release tags")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -27,7 +29,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 
-	value, err := lookup(*manifestPath, flags.Arg(0))
+	value, err := lookup(*manifestPath, flags.Arg(0), *repository)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -41,7 +43,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-func lookup(path, field string) (string, error) {
+func lookup(path, field, repository string) (string, error) {
 	current, err := manifest.Load(path)
 	if err != nil {
 		return "", err
@@ -66,6 +68,11 @@ func lookup(path, field string) (string, error) {
 		return current.ImmutableTag(), nil
 	case "version-tag":
 		return current.VersionTag(), nil
+	case "release-tags":
+		if repository == "" {
+			return "", fmt.Errorf("repository must not be empty for release-tags")
+		}
+		return strings.Join(current.ReleaseTags(repository), "\n"), nil
 	default:
 		return "", fmt.Errorf("unknown field %q", field)
 	}
