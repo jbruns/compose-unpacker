@@ -1,8 +1,10 @@
-GO_BOOTSTRAP_IMAGE := golang:1.26.6
+GO_BOOTSTRAP_VERSION := 1.26.6
+GO_BOOTSTRAP_IMAGE := golang:$(GO_BOOTSTRAP_VERSION)
 GO_CACHE_ROOT := .tmp
 HOST_UID := $(shell id -u)
 HOST_GID := $(shell id -g)
 IMAGE ?= ghcr.io/jbruns/compose-unpacker:test
+MANIFEST ?= versions.json
 
 GO_RUN = docker run --rm --platform linux/amd64 \
 	--user "$(HOST_UID):$(HOST_GID)" \
@@ -20,12 +22,26 @@ GO_RUN = docker run --rm --platform linux/amd64 \
 	$(GO_BOOTSTRAP_IMAGE)
 
 .PHONY: prepare test test-integration image test-image validate clean go-cache \
+	validate-go-bootstrap \
 	manifest-value validate-internal-test validate-internal-vet validate-format \
 	validate-upstream-test validate-upstream-vet validate-fetch-sops \
 	validate-integration validate-install-lint validate-lint
 .NOTPARALLEL:
 
-go-cache:
+validate-go-bootstrap:
+	@manifest_go_version=$$(sed -n \
+		's/.*"goVersion"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+		versions.json | head -n 1); \
+	if [ -z "$$manifest_go_version" ]; then \
+		echo "could not read build.goVersion from versions.json" >&2; \
+		exit 1; \
+	fi; \
+	if [ "$$manifest_go_version" != "$(GO_BOOTSTRAP_VERSION)" ]; then \
+		echo "bootstrap Go version $(GO_BOOTSTRAP_VERSION) does not match versions.json ($$manifest_go_version)" >&2; \
+		exit 1; \
+	fi
+
+go-cache: validate-go-bootstrap
 	@mkdir -p \
 		$(GO_CACHE_ROOT)/home \
 		$(GO_CACHE_ROOT)/test-temp \
@@ -55,11 +71,15 @@ image: prepare
 	$(GO_RUN) /usr/local/go/bin/go run ./cmd/fetch-sops -output .work/dist/sops
 	@set -eu; \
 	manifest_values=$$($(GO_RUN) /bin/sh -lc '\
-		for field in go-version base-image base-digest portainer-version sops-version overlay-revision; do \
+		for field in go-version base-image base-digest portainer-version sops-version overlay-revision compose-unpacker-commit portainer-server-commit; do \
 			/usr/local/go/bin/go run ./cmd/manifest-value "$$field" || exit; \
 		done'); \
 	set -- $$manifest_values; \
-	test "$$#" -eq 6; \
+	test "$$#" -eq 8; \
+	source_revision=$$(git rev-parse HEAD); \
+	build_created=$$(git show -s --format=%cI HEAD); \
+	test -n "$$source_revision"; \
+	test -n "$$build_created"; \
 	docker buildx build \
 		--platform linux/amd64 \
 		--load \
@@ -69,11 +89,14 @@ image: prepare
 		--build-arg PORTAINER_VERSION="$$4" \
 		--build-arg SOPS_VERSION="$$5" \
 		--build-arg OVERLAY_REVISION="$$6" \
-		--build-arg SOURCE_REVISION="$$(git rev-parse HEAD)" \
+		--build-arg COMPOSE_UNPACKER_COMMIT="$$7" \
+		--build-arg PORTAINER_SERVER_COMMIT="$$8" \
+		--build-arg SOURCE_REVISION="$$source_revision" \
+		--build-arg BUILD_CREATED="$$build_created" \
 		--tag "$(IMAGE)" \
 		.
 
-test-image:
+test-image: go-cache
 	./scripts/test-image-layers.sh "$(IMAGE)"
 
 manifest-value: go-cache

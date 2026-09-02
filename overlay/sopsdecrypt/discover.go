@@ -87,10 +87,22 @@ func discover(composeFiles []string, walk walkDirFunc) ([]encryptedFile, error) 
 
 	files := make([]encryptedFile, 0, len(sources))
 	destinations := make(map[string]string, len(sources))
+	sourcePaths := make(map[string]string, len(sources))
+	for _, source := range sources {
+		sourcePaths[filepath.Clean(source)] = source
+	}
 	for _, source := range sources {
 		destination, err := outputPath(source)
 		if err != nil {
 			return nil, err
+		}
+		if collidingSource, exists := sourcePaths[destination]; exists {
+			return nil, fmt.Errorf(
+				"encrypted source %q produces destination %q, which is encrypted source %q",
+				source,
+				destination,
+				collidingSource,
+			)
 		}
 		if previous, exists := destinations[destination]; exists {
 			return nil, fmt.Errorf("encrypted sources %q and %q both produce destination %q", previous, source, destination)
@@ -107,6 +119,10 @@ func outputPath(source string) (string, error) {
 	if !strings.Contains(base, sopsMarker) {
 		return "", fmt.Errorf("encrypted source %q does not contain %q", source, sopsMarker)
 	}
+	outputBase := strings.Replace(base, sopsMarker, ".", 1)
+	if outputBase == "." || outputBase == ".." {
+		return "", fmt.Errorf("encrypted source %q produces unsafe output base name %q", source, outputBase)
+	}
 	// The replacement is a separator-free base name from the walked source.
-	return filepath.Join(filepath.Dir(source), strings.Replace(base, sopsMarker, ".", 1)), nil //nolint:forbidigo
+	return filepath.Join(filepath.Dir(source), outputBase), nil //nolint:forbidigo
 }

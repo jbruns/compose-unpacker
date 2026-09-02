@@ -8,7 +8,7 @@ decrypts stack assets.
 
 Only **Linux amd64** is supported. `versions.json` is authoritative for all
 inputs. The current manifest pins Portainer **2.45.0**, SOPS **v3.13.3**, and
-overlay revision **3**.
+overlay revision **1**.
 
 ## Images
 
@@ -16,14 +16,14 @@ Releases use `ghcr.io/jbruns/compose-unpacker` and publish three tags:
 
 | Tag | Meaning |
 | --- | --- |
-| `2.45.0-sops.3` | Immutable Portainer, SOPS overlay revision |
+| `2.45.0-sops.1` | Immutable Portainer, SOPS overlay revision |
 | `2.45.0-sops` | Moves to the latest overlay for Portainer 2.45.0 |
 | `lts-sops` | Moves to the currently maintained Portainer LTS image |
 
 Use the immutable tag in production:
 
 ```text
-ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3
+ghcr.io/jbruns/compose-unpacker:2.45.0-sops.1
 ```
 
 Moving tags are convenient for evaluation but can resolve to a different image
@@ -134,7 +134,7 @@ After installing the GitHub CLI, verify GitHub's build-provenance attestation:
 
 ```sh
 gh attestation verify \
-  oci://ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3 \
+  oci://ghcr.io/jbruns/compose-unpacker:2.45.0-sops.1 \
   --repo jbruns/compose-unpacker
 ```
 
@@ -143,10 +143,10 @@ them with a recent Buildx:
 
 ```sh
 docker buildx imagetools inspect \
-  ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3 \
+  ghcr.io/jbruns/compose-unpacker:2.45.0-sops.1 \
   --format '{{ json .SBOM }}'
 docker buildx imagetools inspect \
-  ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3 \
+  ghcr.io/jbruns/compose-unpacker:2.45.0-sops.1 \
   --format '{{ json .Provenance }}'
 ```
 

@@ -24,7 +24,15 @@ mkdir -p "$FAKE_BIN"
 
 ruby -rpsych -e '
   workflow = Psych.safe_load(File.read(ARGV.fetch(0)), aliases: true)
-  step = workflow.fetch("jobs").fetch("update").fetch("steps")
+  abort "update permissions must not be workflow-wide" if workflow.key?("permissions")
+  update_job = workflow.fetch("jobs").fetch("update")
+  expected_permissions = {
+    "contents" => "write",
+    "pull-requests" => "write",
+  }
+  abort "update job permissions are not least privilege" unless
+    update_job.fetch("permissions") == expected_permissions
+  step = update_job.fetch("steps")
     .find { |candidate| candidate["name"] == "Resolve updates" }
   abort "Resolve updates step not found" unless step
   print step.fetch("run")

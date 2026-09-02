@@ -46,12 +46,26 @@ func Run(ctx context.Context, options Options, runner Runner) error {
 	if err != nil {
 		return fmt.Errorf("resolve root: %w", err)
 	}
-	workDir, err := filepath.Abs(options.WorkDir)
+	workDir := options.WorkDir
+	if !filepath.IsAbs(workDir) {
+		workDir = filepath.Join(root, workDir)
+	}
+	workDir, err = filepath.Abs(workDir)
 	if err != nil {
 		return fmt.Errorf("resolve work directory: %w", err)
 	}
-	if workDir == "" || filepath.Dir(workDir) == workDir {
-		return fmt.Errorf("refuse to remove root work directory %q", workDir)
+	relativeWorkDir, err := filepath.Rel(root, workDir)
+	if err != nil {
+		return fmt.Errorf("compare work directory with repository root: %w", err)
+	}
+	if relativeWorkDir == "." ||
+		relativeWorkDir == ".." ||
+		strings.HasPrefix(relativeWorkDir, ".."+string(filepath.Separator)) {
+		return fmt.Errorf(
+			"work directory %q must be strictly below repository root %q",
+			workDir,
+			root,
+		)
 	}
 	if err := os.RemoveAll(workDir); err != nil {
 		return fmt.Errorf("remove work directory: %w", err)

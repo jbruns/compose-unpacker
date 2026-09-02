@@ -12,7 +12,7 @@ cleanup() {
 trap cleanup EXIT
 
 usage() {
-	echo "usage: $0 [--image IMAGE]" >&2
+	echo "usage: $0 [--image IMAGE | --existing-image IMAGE]" >&2
 	exit 2
 }
 
@@ -76,6 +76,17 @@ enforce_release_revision() {
 		return
 	fi
 
+	local current_revision
+	current_revision=$(manifest_value versions.json overlay-revision)
+	heading 'git cat-file -e "$BASE_REF:versions.json"'
+	if ! git cat-file -e "$BASE_REF:versions.json" 2>/dev/null; then
+		if [[ "$current_revision" -ne 1 ]]; then
+			echo "release-impacting changes against a base without versions.json require overlayRevision 1 (found $current_revision)" >&2
+			return 1
+		fi
+		return
+	fi
+
 	mkdir -p .tmp
 	BASE_MANIFEST=".tmp/validate-base-manifest.$$"
 	heading 'git show "$BASE_REF:versions.json"'
@@ -84,11 +95,9 @@ enforce_release_revision() {
 	local base_portainer
 	local base_revision
 	local current_portainer
-	local current_revision
 	base_portainer=$(manifest_value "$BASE_MANIFEST" portainer-version)
 	base_revision=$(manifest_value "$BASE_MANIFEST" overlay-revision)
 	current_portainer=$(manifest_value versions.json portainer-version)
-	current_revision=$(manifest_value versions.json overlay-revision)
 
 	if [[ "$current_portainer" != "$base_portainer" ]]; then
 		if [[ "$current_revision" -ne 1 ]]; then
@@ -102,7 +111,8 @@ enforce_release_revision() {
 }
 
 check_shell_syntax() {
-	find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+	find scripts .github/tests -type f -name '*.sh' -print0 |
+		xargs -0 -n1 bash -n
 }
 
 run_workflow_tests() {
@@ -114,10 +124,16 @@ run_workflow_tests() {
 }
 
 IMAGE=
+BUILD_IMAGE=false
 case $# in
 	0) ;;
 	2)
-		[[ "$1" == --image && -n "$2" ]] || usage
+		[[ -n "$2" ]] || usage
+		case "$1" in
+			--image) BUILD_IMAGE=true ;;
+			--existing-image) ;;
+			*) usage ;;
+		esac
 		IMAGE=$2
 		;;
 	*)
@@ -137,7 +153,7 @@ run_stage "go vet ./internal/..." \
 	make --no-print-directory validate-internal-vet
 run_stage 'test -z "$(gofmt -l cmd internal overlay)"' \
 	make --no-print-directory validate-format
-run_stage "find scripts -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n" \
+run_stage "find scripts .github/tests -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n" \
 	check_shell_syntax
 run_stage 'for test in .github/tests/*.sh; do bash "$test"; done' \
 	run_workflow_tests
@@ -159,8 +175,10 @@ run_stage "golangci-lint run --timeout=10m -c .golangci.yaml ./..." \
 	make --no-print-directory validate-lint
 
 if [[ -n "$IMAGE" ]]; then
-	run_stage "make image IMAGE=$IMAGE" \
-		make --no-print-directory image "IMAGE=$IMAGE"
+	if [[ "$BUILD_IMAGE" == true ]]; then
+		run_stage "make image IMAGE=$IMAGE" \
+			make --no-print-directory image "IMAGE=$IMAGE"
+	fi
 	run_stage "make test-image IMAGE=$IMAGE" \
 		make --no-print-directory test-image "IMAGE=$IMAGE"
 fi

@@ -10,32 +10,20 @@ IMAGE=$1
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd "$ROOT"
 
-mkdir -p .tmp/{home,test-temp,go-build,go-mod,go-path}
-go_container=(
-	docker run --rm --platform linux/amd64
-	--user "$(id -u):$(id -g)"
-	-e PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
-	-e HOME=/repo/.tmp/home
-	-e TMPDIR=/repo/.tmp/test-temp
-	-e GOCACHE=/repo/.tmp/go-build
-	-e GOMODCACHE=/repo/.tmp/go-mod
-	-e GOPATH=/repo/.tmp/go-path
-	-e GIT_CONFIG_COUNT=1
-	-e GIT_CONFIG_KEY_0=safe.directory
-	-e 'GIT_CONFIG_VALUE_0=*'
-	-v "$ROOT:/repo"
-	-w /repo
-	golang:1.26.6
-)
-
 manifest_value() {
-	"${go_container[@]}" /usr/local/go/bin/go run ./cmd/manifest-value "$1"
+	make --no-print-directory manifest-value \
+		MANIFEST=versions.json \
+		"FIELD=$1"
 }
 
 portainer_version=$(manifest_value portainer-version)
+compose_unpacker_commit=$(manifest_value compose-unpacker-commit)
+portainer_server_commit=$(manifest_value portainer-server-commit)
 sops_version=$(manifest_value sops-version)
 base_digest=$(manifest_value base-digest)
 overlay_revision=$(manifest_value overlay-revision)
+source_revision=$(git rev-parse HEAD)
+build_created=$(git show -s --format=%cI HEAD)
 
 docker run --rm --platform linux/amd64 --entrypoint /app/compose-unpacker "$IMAGE" --help
 docker run --rm --platform linux/amd64 --entrypoint /app/sops "$IMAGE" --version |
@@ -44,9 +32,13 @@ docker run --rm --platform linux/amd64 --entrypoint /app/sops "$IMAGE" --version
 test "$(docker image inspect "$IMAGE" --format '{{.Architecture}}')" = "amd64"
 test "$(docker image inspect "$IMAGE" --format '{{json .Config.Entrypoint}}')" = '["/app/compose-unpacker"]'
 test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "io.jbruns.portainer.version"}}')" = "$portainer_version"
+test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "io.jbruns.portainer.compose-unpacker.commit"}}')" = "$compose_unpacker_commit"
+test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "io.jbruns.portainer.server.commit"}}')" = "$portainer_server_commit"
 test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "io.jbruns.sops.version"}}')" = "$sops_version"
 test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "io.jbruns.overlay.revision"}}')" = "$overlay_revision"
 test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.base.digest"}}')" = "$base_digest"
+test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$source_revision"
+test "$(docker image inspect "$IMAGE" --format '{{index .Config.Labels "org.opencontainers.image.created"}}')" = "$build_created"
 
 archive=".tmp/test-image-scan.$$.tar"
 layer=".tmp/test-image-layer.$$.tar"

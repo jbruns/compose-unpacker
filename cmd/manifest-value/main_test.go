@@ -12,15 +12,17 @@ func TestRunPrintsManifestValues(t *testing.T) {
 
 	manifestPath := filepath.Join("..", "..", "versions.json")
 	tests := map[string]string{
-		"go-version":        "1.26.6",
-		"lint-version":      "v2.13.2",
-		"base-image":        "docker.io/portainer/compose-unpacker@sha256:25aea494af4f4f04ce46f9cf4c72e49ed21085cc80e63561cc75292da54bd60a",
-		"base-digest":       "sha256:25aea494af4f4f04ce46f9cf4c72e49ed21085cc80e63561cc75292da54bd60a",
-		"portainer-version": "2.45.0",
-		"sops-version":      "v3.13.3",
-		"overlay-revision":  "3",
-		"immutable-tag":     "2.45.0-sops.3",
-		"version-tag":       "2.45.0-sops",
+		"go-version":              "1.26.6",
+		"lint-version":            "v2.13.2",
+		"base-image":              "docker.io/portainer/compose-unpacker@sha256:25aea494af4f4f04ce46f9cf4c72e49ed21085cc80e63561cc75292da54bd60a",
+		"base-digest":             "sha256:25aea494af4f4f04ce46f9cf4c72e49ed21085cc80e63561cc75292da54bd60a",
+		"portainer-version":       "2.45.0",
+		"compose-unpacker-commit": "23c8e42176c521cb6745b3ea95233d3a68bbe031",
+		"portainer-server-commit": "d79ba726cd54395a54cca5e9180609ce52fa7a4f",
+		"sops-version":            "v3.13.3",
+		"overlay-revision":        "1",
+		"immutable-tag":           "2.45.0-sops.1",
+		"version-tag":             "2.45.0-sops",
 	}
 
 	for field, want := range tests {
@@ -73,7 +75,7 @@ func TestRunPrintsReleaseTags(t *testing.T) {
 		t.Fatalf("run() code = %d, stderr = %q", code, stderr.String())
 	}
 	want := strings.Join([]string{
-		"ghcr.io/jbruns/compose-unpacker:2.45.0-sops.3",
+		"ghcr.io/jbruns/compose-unpacker:2.45.0-sops.1",
 		"ghcr.io/jbruns/compose-unpacker:2.45.0-sops",
 		"ghcr.io/jbruns/compose-unpacker:lts-sops",
 		"",

@@ -18,12 +18,6 @@ on:
       - internal/prepare/**
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
-  id-token: write
-  attestations: write
-
 concurrency:
   group: release-${{ github.repository }}
   cancel-in-progress: false
@@ -31,6 +25,11 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     steps:
       - name: Require main branch
         run: |
@@ -72,18 +71,31 @@ jobs:
             echo "manifest returned an invalid release tag set" >&2
             exit 1
           fi
+          go_version=$(manifest_value go-version)
+          base_image=$(manifest_value base-image)
+          base_digest=$(manifest_value base-digest)
+          portainer_version=$(manifest_value portainer-version)
+          compose_unpacker_commit=$(manifest_value compose-unpacker-commit)
+          portainer_server_commit=$(manifest_value portainer-server-commit)
+          sops_version=$(manifest_value sops-version)
+          overlay_revision=$(manifest_value overlay-revision)
+          build_created=$(git show -s --format=%cI "$GITHUB_SHA")
+          candidate="${IMAGE_REPOSITORY}:prepublish-${GITHUB_SHA}"
 
           {
             echo "immutable=$immutable"
-            echo "go-version=$(manifest_value go-version)"
-            echo "base-image=$(manifest_value base-image)"
-            echo "base-digest=$(manifest_value base-digest)"
-            echo "portainer-version=$(manifest_value portainer-version)"
-            echo "sops-version=$(manifest_value sops-version)"
-            echo "overlay-revision=$(manifest_value overlay-revision)"
-            echo 'tags<<RELEASE_TAGS'
-            printf '%s\n' "$release_tags"
-            echo RELEASE_TAGS
+            echo "version=$version"
+            echo "lts=$lts"
+            echo "candidate=$candidate"
+            echo "go-version=$go_version"
+            echo "base-image=$base_image"
+            echo "base-digest=$base_digest"
+            echo "portainer-version=$portainer_version"
+            echo "compose-unpacker-commit=$compose_unpacker_commit"
+            echo "portainer-server-commit=$portainer_server_commit"
+            echo "sops-version=$sops_version"
+            echo "overlay-revision=$overlay_revision"
+            echo "build-created=$build_created"
           } >>"$GITHUB_OUTPUT"
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -113,19 +125,19 @@ jobs:
               exit 1
               ;;
           esac
-      - name: Validate prepublish image
-        run: scripts/validate.sh --image "$PREPUBLISH_IMAGE"
-        env:
-          PREPUBLISH_IMAGE: ghcr.io/jbruns/compose-unpacker:prepublish-${{ github.sha }}
-      - name: Build and push release
-        id: push
+      - name: Prepare candidate inputs
+        run: |
+          make --no-print-directory prepare
+          make --no-print-directory validate-fetch-sops
+      - name: Build candidate artifact
+        id: build
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
-          tags: ${{ steps.release.outputs.tags }}
+          tags: ${{ steps.release.outputs.candidate }}
           sbom: true
           provenance: mode=max
           build-args: |
@@ -135,17 +147,47 @@ jobs:
             PORTAINER_VERSION=${{ steps.release.outputs.portainer-version }}
             SOPS_VERSION=${{ steps.release.outputs.sops-version }}
             OVERLAY_REVISION=${{ steps.release.outputs.overlay-revision }}
+            COMPOSE_UNPACKER_COMMIT=${{ steps.release.outputs.compose-unpacker-commit }}
+            PORTAINER_SERVER_COMMIT=${{ steps.release.outputs.portainer-server-commit }}
             SOURCE_REVISION=${{ github.sha }}
+            BUILD_CREATED=${{ steps.release.outputs.build-created }}
+      - name: Validate candidate artifact
+        run: scripts/validate.sh --existing-image "$CANDIDATE_REFERENCE"
+        env:
+          CANDIDATE_REFERENCE: ${{ steps.release.outputs.candidate }}@${{ steps.build.outputs.digest }}
+      - name: Promote validated artifact
+        env:
+          CANDIDATE_REFERENCE: ${{ steps.release.outputs.candidate }}@${{ steps.build.outputs.digest }}
+          VALIDATED_DIGEST: ${{ steps.build.outputs.digest }}
+          IMMUTABLE_TAG: ${{ steps.release.outputs.immutable }}
+          VERSION_TAG: ${{ steps.release.outputs.version }}
+          LTS_TAG: ${{ steps.release.outputs.lts }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools create \
+            --tag "$IMMUTABLE_TAG" \
+            --tag "$VERSION_TAG" \
+            --tag "$LTS_TAG" \
+            "$CANDIDATE_REFERENCE"
+          for tag in "$IMMUTABLE_TAG" "$VERSION_TAG" "$LTS_TAG"; do
+            promoted_digest=$(docker buildx imagetools inspect \
+              "$tag" \
+              --format '{{.Manifest.Digest}}')
+            if [[ "$promoted_digest" != "$VALIDATED_DIGEST" ]]; then
+              echo "$tag does not reference validated digest $VALIDATED_DIGEST (found $promoted_digest)" >&2
+              exit 1
+            fi
+          done
       - name: Attest immutable image
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-name: ghcr.io/jbruns/compose-unpacker
-          subject-digest: ${{ steps.push.outputs.digest }}
+          subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
       - name: Summarize release
         env:
           IMMUTABLE_TAG: ${{ steps.release.outputs.immutable }}
-          DIGEST: ${{ steps.push.outputs.digest }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           {
             echo "## Published image"

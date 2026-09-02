@@ -107,6 +107,30 @@ func TestDiscoverRejectsDuplicateDestinations(t *testing.T) {
 	}
 }
 
+func TestDiscoverRejectsDestinationThatIsAnotherEncryptedSource(t *testing.T) {
+	t.Parallel()
+
+	destinationSource := "/repo/app.sops.env"
+	overwritingSource := "/repo/app.sops.sops.env"
+	walk := func(root string, fn fs.WalkDirFunc) error {
+		for _, path := range []string{destinationSource, overwritingSource} {
+			if err := fn(path, regularDirEntry{name: filepath.Base(path)}, nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	_, err := discover([]string{"/repo/compose.yaml"}, walk)
+	if err == nil {
+		t.Fatal("discover() error = nil, want encrypted source collision error")
+	}
+	if !strings.Contains(err.Error(), destinationSource) ||
+		!strings.Contains(err.Error(), overwritingSource) {
+		t.Fatalf("error %q does not name both colliding sources", err)
+	}
+}
+
 func TestDiscoverPropagatesWalkErrors(t *testing.T) {
 	t.Parallel()
 
@@ -154,6 +178,22 @@ func TestOutputPathRequiresMarkerInBaseName(t *testing.T) {
 		"/repo/sops.env",
 		"/repo/app.sops",
 		"/repo/.sops-directory/app.env",
+	} {
+		t.Run(source, func(t *testing.T) {
+			t.Parallel()
+			if _, err := outputPath(source); err == nil {
+				t.Fatalf("outputPath(%q) error = nil", source)
+			}
+		})
+	}
+}
+
+func TestOutputPathRejectsDegenerateBaseNames(t *testing.T) {
+	t.Parallel()
+
+	for _, source := range []string{
+		"/repo/.sops.",
+		"/repo/.sops..",
 	} {
 		t.Run(source, func(t *testing.T) {
 			t.Parallel()

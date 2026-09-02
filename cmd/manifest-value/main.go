@@ -60,6 +60,10 @@ func lookup(path, field, repository string) (string, error) {
 		return current.Portainer.LinuxAMD64Digest, nil
 	case "portainer-version":
 		return current.Portainer.Version, nil
+	case "compose-unpacker-commit":
+		return current.Portainer.ComposeUnpackerCommit, nil
+	case "portainer-server-commit":
+		return current.Portainer.ServerCommit, nil
 	case "sops-version":
 		return current.SOPS.Version, nil
 	case "overlay-revision":

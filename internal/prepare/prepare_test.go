@@ -241,6 +241,66 @@ func TestRunRejectsEmptyWorkDir(t *testing.T) {
 	}
 }
 
+func TestRunRejectsWorkDirNotStrictlyBelowRepositoryRootBeforeRemoval(t *testing.T) {
+	t.Parallel()
+
+	sandbox := t.TempDir()
+	filesystemRoot := filepath.VolumeName(sandbox) + string(filepath.Separator)
+	tests := []struct {
+		name    string
+		root    string
+		workDir string
+	}{
+		{
+			name:    "repository root",
+			root:    filepath.Join(sandbox, "repository-root"),
+			workDir: filepath.Join(sandbox, "repository-root"),
+		},
+		{
+			name:    "outside repository root",
+			root:    filepath.Join(sandbox, "repository"),
+			workDir: filepath.Join(sandbox, "outside"),
+		},
+		{
+			name:    "filesystem root",
+			root:    filepath.Join(sandbox, "repository-for-filesystem-root"),
+			workDir: filesystemRoot,
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			if err := os.MkdirAll(test.root, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			sentinel := filepath.Join(test.root, "sentinel")
+			if err := os.WriteFile(sentinel, []byte("keep"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			runner := newFakeRunner()
+
+			err := Run(context.Background(), Options{
+				Root:     test.root,
+				WorkDir:  test.workDir,
+				Manifest: validManifest(),
+			}, runner)
+			if err == nil {
+				t.Fatal("Run() error = nil, want unsafe work directory error")
+			}
+			if !strings.Contains(err.Error(), "strictly below repository root") {
+				t.Fatalf("Run() error = %q, want repository containment error", err)
+			}
+			if _, err := os.Stat(sentinel); err != nil {
+				t.Fatalf("repository sentinel was removed before validation: %v", err)
+			}
+			if len(runner.runCalls) != 0 || len(runner.outputCalls) != 0 {
+				t.Fatalf("runner called before work directory validation: runs=%v outputs=%v", runner.runCalls, runner.outputCalls)
+			}
+		})
+	}
+}
+
 type fakeRunner struct {
 	runCalls    []fakeCall
 	outputCalls []fakeCall
