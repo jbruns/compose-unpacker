@@ -107,5 +107,6 @@ func outputPath(source string) (string, error) {
 	if !strings.Contains(base, sopsMarker) {
 		return "", fmt.Errorf("encrypted source %q does not contain %q", source, sopsMarker)
 	}
-	return filepath.Join(filepath.Dir(source), strings.Replace(base, sopsMarker, ".", 1)), nil
+	// The replacement is a separator-free base name from the walked source.
+	return filepath.Join(filepath.Dir(source), strings.Replace(base, sopsMarker, ".", 1)), nil //nolint:forbidigo
 }

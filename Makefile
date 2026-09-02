@@ -19,7 +19,10 @@ GO_RUN = docker run --rm --platform linux/amd64 \
 	-w /repo \
 	$(GO_BOOTSTRAP_IMAGE)
 
-.PHONY: prepare test test-integration image test-image validate clean go-cache
+.PHONY: prepare test test-integration image test-image validate clean go-cache \
+	manifest-value validate-internal-test validate-internal-vet validate-format \
+	validate-upstream-test validate-upstream-vet validate-fetch-sops \
+	validate-integration validate-install-lint validate-lint
 .NOTPARALLEL:
 
 go-cache:
@@ -39,6 +42,7 @@ test: prepare
 		cd /repo/.work/upstream/compose-unpacker && \
 		/usr/local/go/bin/go test ./... -count=1'
 	./scripts/test-make-image.sh
+	./scripts/test-validate.sh
 
 test-integration: prepare
 	$(GO_RUN) /usr/local/go/bin/go run ./cmd/fetch-sops -output .work/dist/sops
@@ -72,7 +76,54 @@ image: prepare
 test-image:
 	./scripts/test-image-layers.sh "$(IMAGE)"
 
-validate: test test-integration image test-image
+manifest-value: go-cache
+	@$(GO_RUN) /usr/local/go/bin/go run ./cmd/manifest-value \
+		-manifest "$(MANIFEST)" "$(FIELD)"
+
+validate-internal-test: go-cache
+	$(GO_RUN) /usr/local/go/bin/go test -race ./internal/...
+
+validate-internal-vet: go-cache
+	$(GO_RUN) /usr/local/go/bin/go vet ./internal/...
+
+validate-format: go-cache
+	$(GO_RUN) /bin/sh -lc \
+		'test -z "$$(/usr/local/go/bin/gofmt -l cmd internal overlay)"'
+
+validate-upstream-test: go-cache
+	$(GO_RUN) /bin/sh -lc '\
+		cd /repo/.work/upstream/compose-unpacker && \
+		/usr/local/go/bin/go test -race ./...'
+
+validate-upstream-vet: go-cache
+	$(GO_RUN) /bin/sh -lc '\
+		cd /repo/.work/upstream/compose-unpacker && \
+		/usr/local/go/bin/go vet ./...'
+
+validate-fetch-sops: go-cache
+	$(GO_RUN) /usr/local/go/bin/go run ./cmd/fetch-sops \
+		-output .work/dist/sops
+
+validate-integration: go-cache
+	$(GO_RUN) /bin/sh -lc '\
+		cd /repo/.work/upstream/compose-unpacker && \
+		SOPS_BINARY=/repo/.work/dist/sops \
+		/usr/local/go/bin/go test -tags=integration ./sopsdecrypt'
+
+validate-install-lint: go-cache
+	@mkdir -p .work/bin
+	$(GO_RUN) /bin/sh -lc '\
+		GOBIN=/repo/.work/bin \
+		/usr/local/go/bin/go install \
+		github.com/golangci/golangci-lint/v2/cmd/golangci-lint@"$(LINT_VERSION)"'
+
+validate-lint: go-cache
+	$(GO_RUN) /bin/sh -c '\
+		cd /repo/.work/upstream/compose-unpacker && \
+		/repo/.work/bin/golangci-lint run --timeout=10m -c .golangci.yaml ./...'
+
+validate:
+	./scripts/validate.sh --image "$(IMAGE)"
 
 clean:
 	rm -rf .work coverage.out

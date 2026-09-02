@@ -15,7 +15,7 @@ func TestManifestValidate(t *testing.T) {
 	if err := valid.Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
-	if got := valid.ImmutableTag(); got != "2.45.0-sops.1" {
+	if got := valid.ImmutableTag(); got != "2.45.0-sops.2" {
 		t.Fatalf("ImmutableTag() = %q", got)
 	}
 	if got := valid.VersionTag(); got != "2.45.0-sops" {
@@ -213,6 +213,6 @@ func validManifest() manifest.Manifest {
 			SHA256:  "e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b",
 		},
 		Platform:        "linux/amd64",
-		OverlayRevision: 1,
+		OverlayRevision: 2,
 	}
 }

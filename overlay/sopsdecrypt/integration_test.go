@@ -1,5 +1,6 @@
 //go:build integration
 
+//nolint:forbidigo // Test paths are rooted in t.TempDir or fixed fixtures.
 package sopsdecrypt
 
 import (

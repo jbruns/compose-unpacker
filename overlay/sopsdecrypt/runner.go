@@ -36,8 +36,7 @@ func (r binaryRunner) Decrypt(ctx context.Context, source string, destination io
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return fmt.Errorf("decrypt %s: %w", absoluteSource, ctxErr)
 		}
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			return fmt.Errorf("decrypt %s: sops exited with status %d", absoluteSource, exitErr.ExitCode())
 		}
 		return fmt.Errorf("decrypt %s: start sops: %w", absoluteSource, err)

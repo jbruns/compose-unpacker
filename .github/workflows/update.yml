@@ -1,0 +1,72 @@
+name: Update upstream inputs
+
+on:
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: main
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - name: Resolve updates
+        id: update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          summary=$(go run ./cmd/update-versions -manifest versions.json -write)
+          printf '%s\n' "$summary"
+          {
+            echo 'change-summary<<CHANGE_SUMMARY'
+            printf '%s\n' "$summary"
+            echo CHANGE_SUMMARY
+          } >>"$GITHUB_OUTPUT"
+          if git diff --quiet -- versions.json; then
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          fi
+      - name: Validate update
+        if: steps.update.outputs.changed == 'true'
+        run: scripts/validate.sh --image ghcr.io/jbruns/compose-unpacker:update-${GITHUB_RUN_ID}
+      - name: Create pull request
+        if: steps.update.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: automation/update-upstream
+          commit-message: "build: update Portainer and SOPS inputs"
+          title: "build: update Portainer and SOPS inputs"
+          body: |
+            Automated weekly update of the pinned Portainer and SOPS inputs.
+
+            ## ChangeSummary
+
+            ```json
+            ${{ steps.update.outputs.change-summary }}
+            ```
+
+            ## Successful validation stages
+
+            - Maintained-package race tests and vet
+            - Go formatting and shell syntax checks
+            - Prepared upstream race tests and vet
+            - SOPS download and tagged decryption integration test
+            - Manifest-pinned golangci-lint
+            - Runtime image build, smoke test, provenance checks, and layer scan

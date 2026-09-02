@@ -1,3 +1,4 @@
+//nolint:forbidigo // Test paths are rooted in t.TempDir.
 package sopsdecrypt
 
 import (

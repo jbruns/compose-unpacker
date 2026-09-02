@@ -1,3 +1,4 @@
+//nolint:forbidigo // Test paths are rooted in t.TempDir or fixed fixtures.
 package sopsdecrypt
 
 import (
@@ -154,7 +155,6 @@ func TestOutputPathRequiresMarkerInBaseName(t *testing.T) {
 		"/repo/app.sops",
 		"/repo/.sops-directory/app.env",
 	} {
-		source := source
 		t.Run(source, func(t *testing.T) {
 			t.Parallel()
 			if _, err := outputPath(source); err == nil {
@@ -181,7 +181,7 @@ type regularDirEntry struct {
 func (e regularDirEntry) Name() string               { return e.name }
 func (regularDirEntry) IsDir() bool                  { return false }
 func (regularDirEntry) Type() fs.FileMode            { return 0 }
-func (e regularDirEntry) Info() (fs.FileInfo, error) { return regularFileInfo{name: e.name}, nil }
+func (e regularDirEntry) Info() (fs.FileInfo, error) { return regularFileInfo(e), nil }
 
 type regularFileInfo struct {
 	name string

@@ -18,8 +18,8 @@ func TestRunPrintsManifestValues(t *testing.T) {
 		"base-digest":       "sha256:25aea494af4f4f04ce46f9cf4c72e49ed21085cc80e63561cc75292da54bd60a",
 		"portainer-version": "2.45.0",
 		"sops-version":      "v3.13.3",
-		"overlay-revision":  "1",
-		"immutable-tag":     "2.45.0-sops.1",
+		"overlay-revision":  "2",
+		"immutable-tag":     "2.45.0-sops.2",
 		"version-tag":       "2.45.0-sops",
 	}
 
