@@ -216,7 +216,7 @@ func applyPatch(ctx context.Context, runner Runner, repository, patch string) er
 }
 
 func verifyChanges(ctx context.Context, runner Runner, repository string, allowed []string) error {
-	output, err := runner.Output(ctx, repository, "git", "status", "--porcelain")
+	output, err := runner.Output(ctx, repository, "git", "status", "--porcelain", "--untracked-files=all")
 	if err != nil {
 		return err
 	}

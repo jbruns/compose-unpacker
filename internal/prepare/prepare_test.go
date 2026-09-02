@@ -38,6 +38,13 @@ func TestRunPreparesImmutableUpstreamTrees(t *testing.T) {
 	if err := os.WriteFile(patchPath, []byte("placeholder"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
+	overlayFile := filepath.Join(root, "overlay", "sopsdecrypt", "discover_test.go")
+	if err := os.MkdirAll(filepath.Dir(overlayFile), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(overlayFile, []byte("package sopsdecrypt\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
 
 	currentManifest := validManifest()
 	composeDir := filepath.Join(workDir, "upstream", "compose-unpacker")
@@ -46,8 +53,8 @@ func TestRunPreparesImmutableUpstreamTrees(t *testing.T) {
 	runner := newFakeRunner()
 	runner.setOutput(composeDir, "git rev-parse HEAD", currentManifest.Portainer.ComposeUnpackerCommit+"\n")
 	runner.setOutput(portainerDir, "git rev-parse HEAD", currentManifest.Portainer.ServerCommit+"\n")
-	runner.setOutput(composeDir, "git status --porcelain", " M commands/compose_deploy.go\n M go.mod\n")
-	runner.setOutput(portainerDir, "git status --porcelain", "")
+	runner.setOutput(composeDir, "git status --porcelain --untracked-files=all", " M commands/compose_deploy.go\n M go.mod\n?? sopsdecrypt/discover_test.go\n")
+	runner.setOutput(portainerDir, "git status --porcelain --untracked-files=all", "")
 
 	if err := Run(context.Background(), Options{
 		Root:     root,
@@ -84,8 +91,8 @@ func TestRunPreparesImmutableUpstreamTrees(t *testing.T) {
 	wantOutputCommands := []string{
 		"git rev-parse HEAD",
 		"git rev-parse HEAD",
-		"git status --porcelain",
-		"git status --porcelain",
+		"git status --porcelain --untracked-files=all",
+		"git status --porcelain --untracked-files=all",
 	}
 	if !reflect.DeepEqual(runner.outputCommands(), wantOutputCommands) {
 		t.Fatalf("output commands = %#v, want %#v", runner.outputCommands(), wantOutputCommands)
