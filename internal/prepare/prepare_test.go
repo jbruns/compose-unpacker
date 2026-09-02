@@ -38,12 +38,18 @@ func TestRunPreparesImmutableUpstreamTrees(t *testing.T) {
 	if err := os.WriteFile(patchPath, []byte("placeholder"), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	overlayFile := filepath.Join(root, "overlay", "sopsdecrypt", "discover_test.go")
-	if err := os.MkdirAll(filepath.Dir(overlayFile), 0o755); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
+	overlayFiles := map[string]string{
+		filepath.Join(root, "overlay", "commands", "sops.go"):             "package commands\n",
+		filepath.Join(root, "overlay", "commands", "sops_test.go"):        "package commands\n",
+		filepath.Join(root, "overlay", "sopsdecrypt", "discover_test.go"): "package sopsdecrypt\n",
 	}
-	if err := os.WriteFile(overlayFile, []byte("package sopsdecrypt\n"), 0o644); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
+	for path, contents := range overlayFiles {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("MkdirAll() error = %v", err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
 	}
 
 	currentManifest := validManifest()
@@ -53,7 +59,7 @@ func TestRunPreparesImmutableUpstreamTrees(t *testing.T) {
 	runner := newFakeRunner()
 	runner.setOutput(composeDir, "git rev-parse HEAD", currentManifest.Portainer.ComposeUnpackerCommit+"\n")
 	runner.setOutput(portainerDir, "git rev-parse HEAD", currentManifest.Portainer.ServerCommit+"\n")
-	runner.setOutput(composeDir, "git status --porcelain --untracked-files=all", " M commands/compose_deploy.go\n M go.mod\n?? sopsdecrypt/discover_test.go\n")
+	runner.setOutput(composeDir, "git status --porcelain --untracked-files=all", " M commands/compose_deploy.go\n M commands/swarm_deploy.go\n M go.mod\n?? commands/sops.go\n?? commands/sops_test.go\n?? sopsdecrypt/discover_test.go\n")
 	runner.setOutput(portainerDir, "git status --porcelain --untracked-files=all", "")
 
 	if err := Run(context.Background(), Options{
@@ -81,8 +87,8 @@ func TestRunPreparesImmutableUpstreamTrees(t *testing.T) {
 		"git fetch --depth=1 origin refs/tags/2.45.0",
 		"git checkout --detach d79ba726cd54395a54cca5e9180609ce52fa7a4f",
 		"go mod edit -replace=github.com/portainer/portainer=../portainer",
-		"git apply --check " + patchPath,
-		"git apply " + patchPath,
+		"git apply --check --unidiff-zero " + patchPath,
+		"git apply --unidiff-zero " + patchPath,
 	}
 	if !reflect.DeepEqual(runner.runCommands(), wantCommands) {
 		t.Fatalf("run commands = %#v, want %#v", runner.runCommands(), wantCommands)
@@ -165,7 +171,7 @@ func TestRunReportsFailingStageAndStderr(t *testing.T) {
 	runner := newFakeRunner()
 	runner.setOutput(composeDir, "git rev-parse HEAD", currentManifest.Portainer.ComposeUnpackerCommit+"\n")
 	runner.setOutput(portainerDir, "git rev-parse HEAD", currentManifest.Portainer.ServerCommit+"\n")
-	runner.setError(composeDir, "git apply --check "+patchPath, fmt.Errorf("git apply --check failed: stderr: patch rejected"))
+	runner.setError(composeDir, "git apply --check --unidiff-zero "+patchPath, fmt.Errorf("git apply --check failed: stderr: patch rejected"))
 
 	err := Run(context.Background(), Options{
 		Root:     root,

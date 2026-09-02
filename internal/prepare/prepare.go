@@ -113,7 +113,7 @@ func Run(ctx context.Context, options Options, runner Runner) error {
 		return fmt.Errorf("apply patch: %w", err)
 	}
 
-	allowedComposeChanges := append([]string{"commands/compose_deploy.go", "go.mod"}, copied...)
+	allowedComposeChanges := append([]string{"commands/compose_deploy.go", "commands/swarm_deploy.go", "go.mod"}, copied...)
 	if err := verifyChanges(ctx, runner, composeDir, allowedComposeChanges); err != nil {
 		return fmt.Errorf("verify compose-unpacker changes: %w", err)
 	}
@@ -209,10 +209,10 @@ func copyOverlay(source, destination string) ([]string, error) {
 }
 
 func applyPatch(ctx context.Context, runner Runner, repository, patch string) error {
-	if err := runner.Run(ctx, repository, "git", "apply", "--check", patch); err != nil {
+	if err := runner.Run(ctx, repository, "git", "apply", "--check", "--unidiff-zero", patch); err != nil {
 		return err
 	}
-	return runner.Run(ctx, repository, "git", "apply", patch)
+	return runner.Run(ctx, repository, "git", "apply", "--unidiff-zero", patch)
 }
 
 func verifyChanges(ctx context.Context, runner Runner, repository string, allowed []string) error {
