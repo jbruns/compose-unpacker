@@ -1,0 +1,12 @@
+diff --git a/commands/compose_deploy.go b/commands/compose_deploy.go
+--- a/commands/compose_deploy.go
++++ b/commands/compose_deploy.go
+@@ -39,7 +39,7 @@ func (cmd *DeployCommand) Run(cmdCtx *exec.CommandExecutionContext) error {
+ 	log.Info().
+ 		Str("repository", cmd.GitRepository).
+ 		Strs("composePath", cmd.ComposeRelativeFilePaths).
+ 		Str("destination", cmd.Destination).
+-		Strs("env", cmd.Env).
++		Int("envCount", len(cmd.Env)).
+ 		Bool("skipTLSVerify", cmd.SkipTLSVerify).
+ 		Msg("Deploying Compose stack from Git repository")
