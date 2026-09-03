@@ -24,7 +24,7 @@ GO_RUN = docker run --rm --platform linux/amd64 \
 .PHONY: prepare test test-integration image test-image validate clean go-cache \
 	validate-go-bootstrap \
 	manifest-value validate-internal-test validate-internal-vet validate-format \
-	validate-upstream-test validate-upstream-vet validate-fetch-sops \
+	validate-repository-assets validate-upstream-test validate-upstream-vet validate-fetch-sops \
 	validate-integration validate-install-lint validate-lint
 .NOTPARALLEL:
 
@@ -112,6 +112,9 @@ validate-internal-vet: go-cache
 validate-format: go-cache
 	$(GO_RUN) /bin/sh -lc \
 		'test -z "$$(/usr/local/go/bin/gofmt -l cmd internal overlay)"'
+
+validate-repository-assets:
+	./scripts/test-repository-assets.sh
 
 validate-upstream-test: go-cache
 	$(GO_RUN) /bin/sh -lc '\

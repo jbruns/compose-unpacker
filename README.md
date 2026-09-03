@@ -149,7 +149,3 @@ docker buildx imagetools inspect \
   ghcr.io/jbruns/compose-unpacker:2.45.0-sops.1 \
   --format '{{ json .Provenance }}'
 ```
-
-The old manual notes are historical context, not current instructions. Do not
-use their release branches, branch-wide import replacement, pseudo-version
-lookup, Docker Hub login, or manual `build_and_push.sh` process.

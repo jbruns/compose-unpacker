@@ -159,6 +159,8 @@ run_stage 'for test in .github/tests/*.sh; do bash "$test"; done' \
 	run_workflow_tests
 run_stage "go run ./cmd/prepare" \
 	make --no-print-directory prepare
+run_stage "./scripts/test-repository-assets.sh" \
+	make --no-print-directory validate-repository-assets
 run_stage "(cd .work/upstream/compose-unpacker && go test -race ./...)" \
 	make --no-print-directory validate-upstream-test
 run_stage "(cd .work/upstream/compose-unpacker && go vet ./...)" \

@@ -131,6 +131,7 @@ validate-format
 workflow-test:release
 workflow-test:update
 prepare
+validate-repository-assets
 validate-upstream-test
 validate-upstream-vet
 validate-fetch-sops
@@ -153,6 +154,7 @@ for heading in \
 	"find scripts .github/tests -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n" \
 	'for test in .github/tests/*.sh; do bash "$test"; done' \
 	"go run ./cmd/prepare" \
+	"./scripts/test-repository-assets.sh" \
 	"(cd .work/upstream/compose-unpacker && go test -race ./...)" \
 	"(cd .work/upstream/compose-unpacker && go vet ./...)" \
 	"go run ./cmd/fetch-sops -output .work/dist/sops" \
@@ -174,6 +176,7 @@ validate-format
 workflow-test:release
 workflow-test:update
 prepare
+validate-repository-assets
 validate-upstream-test
 validate-upstream-vet
 validate-fetch-sops

@@ -189,34 +189,74 @@ func TestRunReportsFailingStageAndStderr(t *testing.T) {
 	}
 }
 
-func TestComposeUnpackerPatchAppliesToExpectedSourceAndRejectsDrift(t *testing.T) {
+func TestComposeUnpackerPatchUsesContext(t *testing.T) {
 	t.Parallel()
 
 	patchPath := repositoryPath(t, "patches", "compose-unpacker.patch")
+	contents, err := os.ReadFile(patchPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", patchPath, err)
+	}
 
-	expectedRepo := fixtureRepo(t, "compose-unpacker-upstream")
+	hunkCount := 0
+	hasContext := false
+	for _, line := range strings.Split(string(contents), "\n") {
+		if strings.HasPrefix(line, "@@ ") {
+			if hunkCount > 0 && !hasContext {
+				t.Fatalf("patch hunk %d has no context", hunkCount)
+			}
+			hunkCount++
+			hasContext = false
+			continue
+		}
+		if hunkCount > 0 && strings.HasPrefix(line, " ") {
+			hasContext = true
+		}
+	}
+	if hunkCount == 0 {
+		t.Fatal("patch has no hunks")
+	}
+	if !hasContext {
+		t.Fatalf("patch hunk %d has no context", hunkCount)
+	}
+}
+
+func TestApplyPatchRejectsDrift(t *testing.T) {
+	t.Parallel()
+
+	patchPath := filepath.Join(t.TempDir(), "change.patch")
+	patch := strings.Join([]string{
+		"diff --git a/stack.go b/stack.go",
+		"--- a/stack.go",
+		"+++ b/stack.go",
+		"@@ -1,5 +1,6 @@",
+		" package commands",
+		" ",
+		" func deploy() {",
+		"+\tdecrypt()",
+		" \tdeployer.Deploy()",
+		" }",
+		"",
+	}, "\n")
+	if err := os.WriteFile(patchPath, []byte(patch), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", patchPath, err)
+	}
+
+	source := "package commands\n\nfunc deploy() {\n\tdeployer.Deploy()\n}\n"
+	expectedRepo := patchRepo(t, source)
 	if err := applyPatch(context.Background(), ExecRunner{}, expectedRepo, patchPath); err != nil {
 		t.Fatalf("applyPatch() error = %v", err)
 	}
-
-	composeSource := readRepositoryFile(t, expectedRepo, "commands", "compose_deploy.go")
-	if !strings.Contains(composeSource, `Int("envCount", len(cmd.Env)).`) {
-		t.Fatalf("compose_deploy.go missing envCount redaction after apply")
+	patched, err := os.ReadFile(filepath.Join(expectedRepo, "stack.go"))
+	if err != nil {
+		t.Fatalf("ReadFile(stack.go) error = %v", err)
 	}
-	if strings.Contains(composeSource, `Strs("env", cmd.Env).`) {
-		t.Fatalf("compose_deploy.go still logs raw env after apply")
-	}
-	if !strings.Contains(composeSource, "decryptSOPSFiles(cmdCtx.Context, composeFilePaths, cmd.Env)") {
-		t.Fatalf("compose_deploy.go missing SOPS decryption call after apply")
+	if !strings.Contains(string(patched), "\tdecrypt()\n") {
+		t.Fatal("stack.go missing applied change")
 	}
 
-	swarmSource := readRepositoryFile(t, expectedRepo, "commands", "swarm_deploy.go")
-	if !strings.Contains(swarmSource, "decryptSOPSFiles(cmdCtx.Context, composeFilePaths, cmd.Env)") {
-		t.Fatalf("swarm_deploy.go missing SOPS decryption call after apply")
-	}
-
-	driftedRepo := fixtureRepo(t, "compose-unpacker-drifted")
-	err := applyPatch(context.Background(), ExecRunner{}, driftedRepo, patchPath)
+	driftedRepo := patchRepo(t, strings.Replace(source, "deployer.Deploy()", "deployer.Run()", 1))
+	err = applyPatch(context.Background(), ExecRunner{}, driftedRepo, patchPath)
 	if err == nil {
 		t.Fatal("applyPatch() error = nil, want git apply --check drift rejection")
 	}
@@ -392,40 +432,15 @@ func joinCommand(name string, args ...string) string {
 	return name + " " + strings.Join(args, " ")
 }
 
-func fixtureRepo(t *testing.T, fixture string) string {
+func patchRepo(t *testing.T, source string) string {
 	t.Helper()
 
 	repo := filepath.Join(t.TempDir(), "repo")
 	if err := os.MkdirAll(repo, 0o755); err != nil {
 		t.Fatalf("MkdirAll(%q) error = %v", repo, err)
 	}
-
-	source := filepath.Join("testdata", fixture)
-	if err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relative, err := filepath.Rel(source, path)
-		if err != nil {
-			return err
-		}
-		if relative == "." {
-			return nil
-		}
-
-		target := filepath.Join(repo, relative)
-		if info.IsDir() {
-			return os.MkdirAll(target, info.Mode().Perm())
-		}
-
-		contents, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, contents, info.Mode().Perm())
-	}); err != nil {
-		t.Fatalf("copy fixture %q error = %v", fixture, err)
+	if err := os.WriteFile(filepath.Join(repo, "stack.go"), []byte(source), 0o644); err != nil {
+		t.Fatalf("WriteFile(stack.go) error = %v", err)
 	}
 
 	if err := (ExecRunner{}).Run(context.Background(), repo, "git", "init"); err != nil {
@@ -433,17 +448,6 @@ func fixtureRepo(t *testing.T, fixture string) string {
 	}
 
 	return repo
-}
-
-func readRepositoryFile(t *testing.T, root string, path ...string) string {
-	t.Helper()
-
-	contents, err := os.ReadFile(filepath.Join(append([]string{root}, path...)...))
-	if err != nil {
-		t.Fatalf("ReadFile(%q) error = %v", filepath.Join(append([]string{root}, path...)...), err)
-	}
-
-	return string(contents)
 }
 
 func repositoryPath(t *testing.T, path ...string) string {
