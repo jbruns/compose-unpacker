@@ -1,0 +1,4 @@
+# TEST ONLY: this identity protects no real secret.
+# created: 2026-09-02T21:06:31Z
+# public key: age120tqr5ulfm4seuecla4pqaf6sfx56205yq0vt62xnetd7sdfx3vqkxvjqv
+AGE-SECRET-KEY-1WEH4H4UJUH6M6KW8N2SZLVYJQW7F6ELLRXM7MCMN4TC75T9D2PZSUH6077

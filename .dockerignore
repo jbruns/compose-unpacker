@@ -1,0 +1,7 @@
+**
+!.work/
+!.work/upstream/
+!.work/upstream/compose-unpacker/**
+!.work/upstream/portainer/**
+!.work/dist/
+!.work/dist/sops

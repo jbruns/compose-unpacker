@@ -1,3 +1,7 @@
 dist
 .tmp
 /.idea/
+.work/
+coverage.out
+*.tmp
+overlay/sopsdecrypt/testdata/config.env
