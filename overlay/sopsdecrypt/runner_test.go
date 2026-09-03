@@ -102,7 +102,7 @@ func runSOPSHelper() {
 		fmt.Fprintln(os.Stderr, "provider stderr: secret-test-key")
 		os.Exit(23)
 	case "block":
-		select {}
+		time.Sleep(time.Hour)
 	default:
 		fmt.Fprintln(os.Stderr, "invalid helper action")
 		os.Exit(43)
