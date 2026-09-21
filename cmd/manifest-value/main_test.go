@@ -7,10 +7,11 @@ import (
 	"testing"
 )
 
+var manifestPath = filepath.Join("..", "..", "internal", "manifest", "testdata", "versions.json")
+
 func TestRunPrintsManifestValues(t *testing.T) {
 	t.Parallel()
 
-	manifestPath := filepath.Join("..", "..", "versions.json")
 	tests := map[string]string{
 		"go-version":              "1.26.6",
 		"lint-version":            "v2.13.2",
@@ -47,7 +48,7 @@ func TestRunPrintsManifestValues(t *testing.T) {
 }
 
 func TestRunUsesDefaultManifestPath(t *testing.T) {
-	t.Chdir(filepath.Join("..", ".."))
+	t.Chdir(filepath.Dir(manifestPath))
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -67,7 +68,7 @@ func TestRunPrintsReleaseTags(t *testing.T) {
 	var stderr bytes.Buffer
 
 	code := run([]string{
-		"-manifest", filepath.Join("..", "..", "versions.json"),
+		"-manifest", manifestPath,
 		"-repository", "ghcr.io/jbruns/compose-unpacker",
 		"release-tags",
 	}, &stdout, &stderr)
@@ -95,7 +96,7 @@ func TestRunRequiresRepositoryForReleaseTags(t *testing.T) {
 	var stderr bytes.Buffer
 
 	code := run([]string{
-		"-manifest", filepath.Join("..", "..", "versions.json"),
+		"-manifest", manifestPath,
 		"release-tags",
 	}, &stdout, &stderr)
 	if code == 0 {
@@ -112,7 +113,7 @@ func TestRunRejectsUnknownField(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	if code := run([]string{"-manifest", filepath.Join("..", "..", "versions.json"), "unknown"}, &stdout, &stderr); code == 0 {
+	if code := run([]string{"-manifest", manifestPath, "unknown"}, &stdout, &stderr); code == 0 {
 		t.Fatal("run() code = 0, want non-zero")
 	}
 	if stdout.Len() != 0 {
@@ -129,7 +130,7 @@ func TestRunRejectsExtraArguments(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	if code := run([]string{"-manifest", filepath.Join("..", "..", "versions.json"), "portainer-version", "extra"}, &stdout, &stderr); code == 0 {
+	if code := run([]string{"-manifest", manifestPath, "portainer-version", "extra"}, &stdout, &stderr); code == 0 {
 		t.Fatal("run() code = 0, want non-zero")
 	}
 	if !strings.Contains(stderr.String(), "exactly one field") {

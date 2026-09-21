@@ -1,0 +1,21 @@
+{
+  "portainer": {
+    "version": "2.45.0",
+    "composeUnpackerCommit": "23c8e42176c521cb6745b3ea95233d3a68bbe031",
+    "serverCommit": "d79ba726cd54395a54cca5e9180609ce52fa7a4f",
+    "image": "docker.io/portainer/compose-unpacker",
+    "linuxAMD64Digest": "sha256:25aea494af4f4f04ce46f9cf4c72e49ed21085cc80e63561cc75292da54bd60a"
+  },
+  "build": {
+    "goVersion": "1.26.6",
+    "golangciLintVersion": "v2.13.2"
+  },
+  "sops": {
+    "version": "v3.13.3",
+    "asset": "sops-v3.13.3.linux.amd64",
+    "url": "https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64",
+    "sha256": "e5bec3346a873ae91d871550f3e698c1aad962aff462a080e40f25fde17fef6b"
+  },
+  "platform": "linux/amd64",
+  "overlayRevision": 1
+}

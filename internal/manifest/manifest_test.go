@@ -158,7 +158,7 @@ func TestManifestValidateRejectsInvalidValues(t *testing.T) {
 func TestLoad(t *testing.T) {
 	t.Parallel()
 
-	got, err := manifest.Load("../../versions.json")
+	got, err := manifest.Load("testdata/versions.json")
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
