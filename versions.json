@@ -1,10 +1,10 @@
 {
   "portainer": {
-    "version": "2.45.0",
-    "composeUnpackerCommit": "23c8e42176c521cb6745b3ea95233d3a68bbe031",
-    "serverCommit": "d79ba726cd54395a54cca5e9180609ce52fa7a4f",
+    "version": "2.45.1",
+    "composeUnpackerCommit": "28d5d23b1390a2463c68ccc0da7b77e0faaefbe1",
+    "serverCommit": "bcfb8d2799c92b22c13c1b0df33912c61bd9501e",
     "image": "docker.io/portainer/compose-unpacker",
-    "linuxAMD64Digest": "sha256:25aea494af4f4f04ce46f9cf4c72e49ed21085cc80e63561cc75292da54bd60a"
+    "linuxAMD64Digest": "sha256:1dd4b17030bfbeab004a4c365306204f99f96ce8208ca29d5298226ed3faa68b"
   },
   "build": {
     "goVersion": "1.26.6",
