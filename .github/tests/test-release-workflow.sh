@@ -39,6 +39,7 @@ ruby -rpsych -e '
     versions.json overlay/** patches/** Dockerfile Makefile scripts/**
     cmd/fetch-sops/** cmd/manifest-value/** cmd/prepare/**
     internal/fetch/** internal/manifest/** internal/prepare/**
+    !**/*_test.go !**/testdata/**
   ]
   abort "release paths differ from the release-impacting set" unless push.fetch("paths") == expected_paths
   abort "workflow_dispatch trigger is missing" unless triggers.key?("workflow_dispatch")

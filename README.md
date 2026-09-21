@@ -90,6 +90,7 @@ Publication is a separate gate. Only a relevant change merged to `main`, or an
 explicit manual release dispatch on `main`, runs full prepublication validation
 and publishes. The workflow authenticates to GHCR with `GITHUB_TOKEN`, refuses
 to overwrite an existing immutable tag, then updates the two moving aliases.
+Go test files and `testdata` fixtures do not trigger a release.
 
 Before enabling either scheduled updates or releases for this repository:
 

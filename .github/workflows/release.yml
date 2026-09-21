@@ -16,6 +16,8 @@ on:
       - internal/fetch/**
       - internal/manifest/**
       - internal/prepare/**
+      - "!**/*_test.go"
+      - "!**/testdata/**"
   workflow_dispatch:
 
 concurrency:
